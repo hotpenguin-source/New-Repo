@@ -6,8 +6,6 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-const roomId = socket.handshake.query.roomId || "default";
-
 /* Serve frontend */
 app.use(express.static("public"));
 
@@ -17,9 +15,16 @@ app.use(express.static("public"));
 io.on("connection", (socket) => {
   const roomId = socket.handshake.query.roomId;
 
+  // ✅ SAFE CHECK (PREVENT RENDER CRASH)
+  if (!roomId) {
+    console.log("Missing roomId, disconnecting:", socket.id);
+    socket.disconnect();
+    return;
+  }
+
   socket.join(roomId);
 
-  console.log("User joined room:", roomId);
+  console.log(`User ${socket.id} joined room: ${roomId}`);
 
   /* OFFER */
   socket.on("offer", (offer) => {
@@ -31,12 +36,21 @@ io.on("connection", (socket) => {
     socket.to(roomId).emit("answer", answer);
   });
 
-  /* ICE */
+  /* ICE CANDIDATE */
   socket.on("ice-candidate", (candidate) => {
     socket.to(roomId).emit("ice-candidate", candidate);
   });
+
+  socket.on("disconnect", () => {
+    console.log("User disconnected:", socket.id);
+  });
 });
 
-server.listen(3000, () => {
-  console.log("Server running on port 3000");
+/* =========================
+   START SERVER
+========================= */
+const PORT = process.env.PORT || 3000;
+
+server.listen(PORT, "0.0.0.0", () => {
+  console.log("Server running on port", PORT);
 });

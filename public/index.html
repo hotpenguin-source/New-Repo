@@ -20,10 +20,17 @@
 <script src="/socket.io/socket.io.js"></script>
 <script>
 /* =========================
-   ROOM SYSTEM (IMPORTANT)
+   ROOM SYSTEM
 ========================= */
 const pathParts = window.location.pathname.split("/");
-const roomId = pathParts[2];
+
+// /room/:id
+const roomId = pathParts[2] || "default-room";
+
+/* Safety check (optional but recommended) */
+if (!pathParts[2]) {
+  alert("Invalid room URL. Use /room/ROOM_ID");
+}
 
 const socket = io({
   query: { roomId }
@@ -45,7 +52,6 @@ const camBtn = document.getElementById("camBtn");
 ========================= */
 let localStream;
 let peerConnection;
-let isCaller = false;
 
 let micEnabled = true;
 let camEnabled = true;
@@ -94,8 +100,6 @@ async function init() {
 callBtn.onclick = async () => {
   await init();
 
-  isCaller = true;
-
   const offer = await peerConnection.createOffer();
   await peerConnection.setLocalDescription(offer);
 
@@ -129,13 +133,10 @@ socket.on("connect", async () => {
   await init();
 });
 
-/* OFFER = someone started call */
 socket.on("offer", async (offer) => {
   await init();
 
   if (!peerConnection.currentRemoteDescription) {
-    isCaller = false;
-
     await peerConnection.setRemoteDescription(offer);
 
     const answer = await peerConnection.createAnswer();
@@ -145,12 +146,10 @@ socket.on("offer", async (offer) => {
   }
 });
 
-/* ANSWER */
 socket.on("answer", async (answer) => {
   await peerConnection.setRemoteDescription(answer);
 });
 
-/* ICE */
 socket.on("ice-candidate", async (candidate) => {
   try {
     await peerConnection.addIceCandidate(candidate);
