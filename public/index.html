@@ -18,17 +18,15 @@
 <button id="camBtn">Turn Camera Off</button>
 
 <script src="/socket.io/socket.io.js"></script>
+
 <script>
 /* =========================
-   ROOM SYSTEM
+   ROOM SYSTEM FIX
 ========================= */
 const pathParts = window.location.pathname.split("/");
+const roomId = pathParts[2];
 
-// /room/:id
-const roomId = pathParts[2] || "default-room";
-
-/* Safety check (optional but recommended) */
-if (!pathParts[2]) {
+if (!roomId) {
   alert("Invalid room URL. Use /room/ROOM_ID");
 }
 
@@ -63,7 +61,7 @@ const config = {
 };
 
 /* =========================
-   INIT MEDIA + PEER
+   INIT
 ========================= */
 async function init() {
   if (peerConnection) return;
