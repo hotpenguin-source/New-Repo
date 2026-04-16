@@ -14,17 +14,28 @@
 <br><br>
 
 <!-- 🎛️ Controls -->
+<button id="callBtn">Start Call</button>
 <button id="micBtn">Mute Mic</button>
 <button id="camBtn">Turn Camera Off</button>
 
 <script src="/socket.io/socket.io.js"></script>
 <script>
+/* =========================
+   ROOM + ROLE SYSTEM
+========================= */
+const urlParams = new URLSearchParams(window.location.search);
+const role = urlParams.get("role") || "caller";
+
+/* =========================
+   SOCKET
+========================= */
 const socket = io();
 
 const localVideo = document.getElementById("localVideo");
 const remoteVideo = document.getElementById("remoteVideo");
 const remoteAudio = document.getElementById("remoteAudio");
 
+const callBtn = document.getElementById("callBtn");
 const micBtn = document.getElementById("micBtn");
 const camBtn = document.getElementById("camBtn");
 
@@ -40,6 +51,9 @@ const config = {
   ]
 };
 
+/* =========================
+   INIT MEDIA + PEER
+========================= */
 async function init() {
   if (peerConnection) return;
 
@@ -64,11 +78,7 @@ async function init() {
     const stream = event.streams[0];
 
     remoteVideo.srcObject = stream;
-    remoteVideo.volume = 1.0;
-    remoteVideo.muted = false;
-
     remoteAudio.srcObject = stream;
-    remoteAudio.volume = 1.0;
   };
 
   peerConnection.onicecandidate = (event) => {
@@ -79,7 +89,26 @@ async function init() {
 }
 
 /* =========================
-   🎤 MIC TOGGLE
+   CALL BUTTON (ONLY CALLER INITIATES)
+========================= */
+callBtn.onclick = async () => {
+  if (role !== "caller") {
+    alert("Only caller can start the call");
+    return;
+  }
+
+  await init();
+
+  const offer = await peerConnection.createOffer();
+  await peerConnection.setLocalDescription(offer);
+  socket.emit("offer", offer);
+
+  callBtn.disabled = true;
+  callBtn.innerText = "Calling...";
+};
+
+/* =========================
+   MIC TOGGLE
 ========================= */
 micBtn.onclick = () => {
   const audioTrack = localStream.getAudioTracks()[0];
@@ -90,7 +119,7 @@ micBtn.onclick = () => {
 };
 
 /* =========================
-   🎥 CAMERA TOGGLE
+   CAMERA TOGGLE
 ========================= */
 camBtn.onclick = () => {
   const videoTrack = localStream.getVideoTracks()[0];
@@ -100,15 +129,16 @@ camBtn.onclick = () => {
   camBtn.innerText = camEnabled ? "Turn Camera Off" : "Turn Camera On";
 };
 
+/* =========================
+   SOCKET EVENTS
+========================= */
 socket.on("connect", async () => {
   await init();
-
-  const offer = await peerConnection.createOffer();
-  await peerConnection.setLocalDescription(offer);
-  socket.emit("offer", offer);
 });
 
 socket.on("offer", async (offer) => {
+  if (role === "caller") return; // prevent self-conflict
+
   await init();
 
   await peerConnection.setRemoteDescription(offer);
