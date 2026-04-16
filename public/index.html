@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Free Video Call (STUN only)</title>
+  <title>Video Call</title>
 </head>
 <body>
 
@@ -9,9 +9,13 @@
 
 <video id="localVideo" autoplay playsinline muted style="width:45%;"></video>
 <video id="remoteVideo" autoplay playsinline style="width:45%;"></video>
-
-<!-- 🔊 NEW: separate audio element -->
 <audio id="remoteAudio" autoplay></audio>
+
+<br><br>
+
+<!-- 🎛️ Controls -->
+<button id="micBtn">Mute Mic</button>
+<button id="camBtn">Turn Camera Off</button>
 
 <script src="/socket.io/socket.io.js"></script>
 <script>
@@ -21,8 +25,14 @@ const localVideo = document.getElementById("localVideo");
 const remoteVideo = document.getElementById("remoteVideo");
 const remoteAudio = document.getElementById("remoteAudio");
 
+const micBtn = document.getElementById("micBtn");
+const camBtn = document.getElementById("camBtn");
+
 let localStream;
 let peerConnection;
+
+let micEnabled = true;
+let camEnabled = true;
 
 const config = {
   iceServers: [
@@ -53,12 +63,10 @@ async function init() {
   peerConnection.ontrack = (event) => {
     const stream = event.streams[0];
 
-    // 🎥 Video
     remoteVideo.srcObject = stream;
     remoteVideo.volume = 1.0;
     remoteVideo.muted = false;
 
-    // 🔊 Audio (separate for better volume)
     remoteAudio.srcObject = stream;
     remoteAudio.volume = 1.0;
   };
@@ -69,6 +77,28 @@ async function init() {
     }
   };
 }
+
+/* =========================
+   🎤 MIC TOGGLE
+========================= */
+micBtn.onclick = () => {
+  const audioTrack = localStream.getAudioTracks()[0];
+  micEnabled = !micEnabled;
+  audioTrack.enabled = micEnabled;
+
+  micBtn.innerText = micEnabled ? "Mute Mic" : "Unmute Mic";
+};
+
+/* =========================
+   🎥 CAMERA TOGGLE
+========================= */
+camBtn.onclick = () => {
+  const videoTrack = localStream.getVideoTracks()[0];
+  camEnabled = !camEnabled;
+  videoTrack.enabled = camEnabled;
+
+  camBtn.innerText = camEnabled ? "Turn Camera Off" : "Turn Camera On";
+};
 
 socket.on("connect", async () => {
   await init();
