@@ -5,18 +5,28 @@
 
   <style>
     #localVideo {
-      transform: scaleX(-1); /* mirror your own camera */
+      transform: scaleX(-1);
+    }
+
+    button {
+      margin: 5px;
     }
   </style>
 </head>
 
 <body>
 
-<h2>Video Call</h2>
+<h2>Our Calling Website!</h2>
 
 <video id="localVideo" autoplay playsinline muted style="width:45%;"></video>
 <video id="remoteVideo" autoplay playsinline style="width:45%;"></video>
 <audio id="remoteAudio" autoplay></audio>
+
+<br><br>
+
+<!-- CONTROLS (NOW ALWAYS AVAILABLE) -->
+<button id="micBtn">Mute Mic</button>
+<button id="camBtn">Turn Camera Off</button>
 
 <script src="/socket.io/socket.io.js"></script>
 
@@ -26,7 +36,9 @@ const socket = io({ query: { roomId } });
 
 let localStream;
 let peerConnection;
-let isCaller = false;
+
+let micEnabled = true;
+let camEnabled = true;
 
 const config = {
   iceServers: [
@@ -34,7 +46,7 @@ const config = {
   ]
 };
 
-/* INIT MEDIA + PEER */
+/* INIT MEDIA */
 async function init() {
   if (peerConnection) return;
 
@@ -64,25 +76,52 @@ async function init() {
   };
 }
 
-/* AUTO CALL LOGIC */
+/* =========================
+   MIC BUTTON (SAFE)
+========================= */
+document.getElementById("micBtn").onclick = () => {
+  if (!localStream) return;
+
+  const track = localStream.getAudioTracks()[0];
+  micEnabled = !micEnabled;
+
+  track.enabled = micEnabled;
+
+  document.getElementById("micBtn").innerText =
+    micEnabled ? "Mute Mic" : "Unmute Mic";
+};
+
+/* =========================
+   CAMERA BUTTON (SAFE)
+========================= */
+document.getElementById("camBtn").onclick = () => {
+  if (!localStream) return;
+
+  const track = localStream.getVideoTracks()[0];
+  camEnabled = !camEnabled;
+
+  track.enabled = camEnabled;
+
+  document.getElementById("camBtn").innerText =
+    camEnabled ? "Turn Camera Off" : "Turn Camera On";
+};
+
+/* =========================
+   AUTO CALL LOGIC
+========================= */
 socket.on("connect", async () => {
   await init();
-
-  // Tell server "I'm ready"
   socket.emit("ready");
 });
 
-/* When second user joins, server tells someone to start call */
 socket.on("start-call", async () => {
-  isCaller = true;
-
   const offer = await peerConnection.createOffer();
   await peerConnection.setLocalDescription(offer);
 
   socket.emit("offer", offer);
 });
 
-/* OFFER RECEIVED */
+/* OFFER */
 socket.on("offer", async (offer) => {
   await init();
 
