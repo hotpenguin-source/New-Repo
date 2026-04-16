@@ -1,53 +1,32 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Video Call</title>
+  <title>Calling Website</title>
+
+  <style>
+    #localVideo {
+      transform: scaleX(-1); /* mirror your own camera */
+    }
+  </style>
 </head>
+
 <body>
 
-<h2>Private Video Call</h2>
+<h2>Video Call</h2>
 
 <video id="localVideo" autoplay playsinline muted style="width:45%;"></video>
 <video id="remoteVideo" autoplay playsinline style="width:45%;"></video>
 <audio id="remoteAudio" autoplay></audio>
 
-<br><br>
-
-<button id="callBtn">Start Call</button>
-<button id="micBtn">Mute Mic</button>
-<button id="camBtn">Turn Camera Off</button>
-
 <script src="/socket.io/socket.io.js"></script>
 
 <script>
-/* =========================
-   FIXED ROOM (ONLY 2 USERS)
-========================= */
 const roomId = "main";
+const socket = io({ query: { roomId } });
 
-const socket = io({
-  query: { roomId }
-});
-
-/* =========================
-   UI
-========================= */
-const localVideo = document.getElementById("localVideo");
-const remoteVideo = document.getElementById("remoteVideo");
-const remoteAudio = document.getElementById("remoteAudio");
-
-const callBtn = document.getElementById("callBtn");
-const micBtn = document.getElementById("micBtn");
-const camBtn = document.getElementById("camBtn");
-
-/* =========================
-   STATE
-========================= */
 let localStream;
 let peerConnection;
-
-let micEnabled = true;
-let camEnabled = true;
+let isCaller = false;
 
 const config = {
   iceServers: [
@@ -55,9 +34,7 @@ const config = {
   ]
 };
 
-/* =========================
-   INIT MEDIA
-========================= */
+/* INIT MEDIA + PEER */
 async function init() {
   if (peerConnection) return;
 
@@ -66,7 +43,7 @@ async function init() {
     audio: true
   });
 
-  localVideo.srcObject = localStream;
+  document.getElementById("localVideo").srcObject = localStream;
 
   peerConnection = new RTCPeerConnection(config);
 
@@ -76,8 +53,8 @@ async function init() {
 
   peerConnection.ontrack = (event) => {
     const stream = event.streams[0];
-    remoteVideo.srcObject = stream;
-    remoteAudio.srcObject = stream;
+    document.getElementById("remoteVideo").srcObject = stream;
+    document.getElementById("remoteAudio").srcObject = stream;
   };
 
   peerConnection.onicecandidate = (event) => {
@@ -87,62 +64,42 @@ async function init() {
   };
 }
 
-/* =========================
-   CALL
-========================= */
-callBtn.onclick = async () => {
+/* AUTO CALL LOGIC */
+socket.on("connect", async () => {
   await init();
+
+  // Tell server "I'm ready"
+  socket.emit("ready");
+});
+
+/* When second user joins, server tells someone to start call */
+socket.on("start-call", async () => {
+  isCaller = true;
 
   const offer = await peerConnection.createOffer();
   await peerConnection.setLocalDescription(offer);
 
   socket.emit("offer", offer);
-
-  callBtn.disabled = true;
-  callBtn.innerText = "Calling...";
-};
-
-/* =========================
-   CONTROLS
-========================= */
-micBtn.onclick = () => {
-  const track = localStream.getAudioTracks()[0];
-  micEnabled = !micEnabled;
-  track.enabled = micEnabled;
-  micBtn.innerText = micEnabled ? "Mute Mic" : "Unmute Mic";
-};
-
-camBtn.onclick = () => {
-  const track = localStream.getVideoTracks()[0];
-  camEnabled = !camEnabled;
-  track.enabled = camEnabled;
-  camBtn.innerText = camEnabled ? "Turn Camera Off" : "Turn Camera On";
-};
-
-/* =========================
-   SIGNALING
-========================= */
-socket.on("connect", async () => {
-  await init();
 });
 
+/* OFFER RECEIVED */
 socket.on("offer", async (offer) => {
   await init();
 
-  if (!peerConnection.currentRemoteDescription) {
-    await peerConnection.setRemoteDescription(offer);
+  await peerConnection.setRemoteDescription(offer);
 
-    const answer = await peerConnection.createAnswer();
-    await peerConnection.setLocalDescription(answer);
+  const answer = await peerConnection.createAnswer();
+  await peerConnection.setLocalDescription(answer);
 
-    socket.emit("answer", answer);
-  }
+  socket.emit("answer", answer);
 });
 
+/* ANSWER */
 socket.on("answer", async (answer) => {
   await peerConnection.setRemoteDescription(answer);
 });
 
+/* ICE */
 socket.on("ice-candidate", async (candidate) => {
   try {
     await peerConnection.addIceCandidate(candidate);

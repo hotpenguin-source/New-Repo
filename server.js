@@ -6,48 +6,63 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-/* Serve frontend */
 app.use(express.static("public"));
 
-/* IMPORTANT: fix /room route (prevents Cannot GET issues if used later) */
 app.get("/room/:id", (req, res) => {
   res.sendFile(__dirname + "/public/index.html");
 });
 
-/* =========================
-   SOCKET (SINGLE ROOM ONLY)
-========================= */
+/* TRACK USERS IN ROOM */
+let waitingSocket = null;
+
 io.on("connection", (socket) => {
   const roomId = socket.handshake.query.roomId;
 
-  if (roomId !== "main") {
+  if (!roomId) {
     socket.disconnect();
     return;
   }
 
-  socket.join("main");
+  socket.join(roomId);
 
-  console.log(`User joined main room: ${socket.id}`);
+  console.log("User joined:", socket.id);
 
+  /* Mark user ready */
+  socket.on("ready", () => {
+    // If no one is waiting → this user waits
+    if (!waitingSocket) {
+      waitingSocket = socket.id;
+      console.log("User is waiting:", socket.id);
+    } else {
+      // Someone is already waiting → start call
+      console.log("Starting call between:", waitingSocket, socket.id);
+
+      io.to(waitingSocket).emit("start-call");
+
+      waitingSocket = null;
+    }
+  });
+
+  /* SIGNALING */
   socket.on("offer", (offer) => {
-    socket.to("main").emit("offer", offer);
+    socket.to(roomId).emit("offer", offer);
   });
 
   socket.on("answer", (answer) => {
-    socket.to("main").emit("answer", answer);
+    socket.to(roomId).emit("answer", answer);
   });
 
   socket.on("ice-candidate", (candidate) => {
-    socket.to("main").emit("ice-candidate", candidate);
+    socket.to(roomId).emit("ice-candidate", candidate);
   });
 
   socket.on("disconnect", () => {
-    console.log("User left:", socket.id);
+    if (waitingSocket === socket.id) {
+      waitingSocket = null;
+    }
   });
 });
 
-const PORT = process.env.PORT || 3000;
-
-server.listen(PORT, "0.0.0.0", () => {
-  console.log("Server running on port", PORT);
+server.listen(process.env.PORT || 3000, "0.0.0.0", () => {
+  console.log("Server running");
 });
