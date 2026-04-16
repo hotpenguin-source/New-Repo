@@ -2,33 +2,11 @@
 <html>
 <head>
   <title>Video Call</title>
-  <style>
-    #incomingCall {
-      display: none;
-      position: fixed;
-      top: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: #222;
-      color: white;
-      padding: 15px;
-      border-radius: 10px;
-    }
-  </style>
 </head>
-
 <body>
 
-<h2>Video Call App</h2>
+<h2>Private Video Call</h2>
 
-<!-- ROOM UI -->
-<button id="createRoomBtn">Create Room</button>
-<button id="copyLinkBtn">Copy Invite Link</button>
-<p id="roomInfo">No room yet</p>
-
-<p id="userCount">Users in room: 0</p>
-
-<!-- VIDEO -->
 <video id="localVideo" autoplay playsinline muted style="width:45%;"></video>
 <video id="remoteVideo" autoplay playsinline style="width:45%;"></video>
 <audio id="remoteAudio" autoplay></audio>
@@ -39,37 +17,21 @@
 <button id="micBtn">Mute Mic</button>
 <button id="camBtn">Turn Camera Off</button>
 
-<!-- INCOMING CALL POPUP -->
-<div id="incomingCall">
-  <p>Incoming Call...</p>
-  <button id="acceptBtn">Accept</button>
-  <button id="rejectBtn">Reject</button>
-</div>
-
 <script src="/socket.io/socket.io.js"></script>
 
 <script>
 /* =========================
-   ROOM SYSTEM
+   FIXED ROOM (ONLY 2 USERS)
 ========================= */
-let roomId = window.location.pathname.split("/")[2];
+const roomId = "main";
 
 const socket = io({
   query: { roomId }
 });
 
 /* =========================
-   UI ELEMENTS
+   UI
 ========================= */
-const createRoomBtn = document.getElementById("createRoomBtn");
-const copyLinkBtn = document.getElementById("copyLinkBtn");
-const roomInfo = document.getElementById("roomInfo");
-const userCount = document.getElementById("userCount");
-
-const incomingCallBox = document.getElementById("incomingCall");
-const acceptBtn = document.getElementById("acceptBtn");
-const rejectBtn = document.getElementById("rejectBtn");
-
 const localVideo = document.getElementById("localVideo");
 const remoteVideo = document.getElementById("remoteVideo");
 const remoteAudio = document.getElementById("remoteAudio");
@@ -87,28 +49,10 @@ let peerConnection;
 let micEnabled = true;
 let camEnabled = true;
 
-/* =========================
-   ICE CONFIG
-========================= */
 const config = {
-  iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
-};
-
-/* =========================
-   CREATE ROOM
-========================= */
-createRoomBtn.onclick = () => {
-  const newRoom = Math.random().toString(36).substring(2, 8);
-  window.location.href = `/room/${newRoom}`;
-};
-
-/* =========================
-   COPY LINK
-========================= */
-copyLinkBtn.onclick = () => {
-  const link = window.location.href;
-  navigator.clipboard.writeText(link);
-  alert("Invite link copied!");
+  iceServers: [
+    { urls: "stun:stun.l.google.com:19302" }
+  ]
 };
 
 /* =========================
@@ -144,7 +88,7 @@ async function init() {
 }
 
 /* =========================
-   CALL BUTTON
+   CALL
 ========================= */
 callBtn.onclick = async () => {
   await init();
@@ -153,66 +97,58 @@ callBtn.onclick = async () => {
   await peerConnection.setLocalDescription(offer);
 
   socket.emit("offer", offer);
+
+  callBtn.disabled = true;
+  callBtn.innerText = "Calling...";
 };
 
 /* =========================
-   MIC / CAM
+   CONTROLS
 ========================= */
 micBtn.onclick = () => {
   const track = localStream.getAudioTracks()[0];
   micEnabled = !micEnabled;
   track.enabled = micEnabled;
+  micBtn.innerText = micEnabled ? "Mute Mic" : "Unmute Mic";
 };
 
 camBtn.onclick = () => {
   const track = localStream.getVideoTracks()[0];
   camEnabled = !camEnabled;
   track.enabled = camEnabled;
+  camBtn.innerText = camEnabled ? "Turn Camera Off" : "Turn Camera On";
 };
 
 /* =========================
-   INCOMING CALL (UI)
+   SIGNALING
 ========================= */
+socket.on("connect", async () => {
+  await init();
+});
+
 socket.on("offer", async (offer) => {
   await init();
 
-  incomingCallBox.style.display = "block";
-
-  acceptBtn.onclick = async () => {
-    incomingCallBox.style.display = "none";
-
+  if (!peerConnection.currentRemoteDescription) {
     await peerConnection.setRemoteDescription(offer);
 
     const answer = await peerConnection.createAnswer();
     await peerConnection.setLocalDescription(answer);
 
     socket.emit("answer", answer);
-  };
-
-  rejectBtn.onclick = () => {
-    incomingCallBox.style.display = "none";
-  };
+  }
 });
 
-/* ANSWER */
 socket.on("answer", async (answer) => {
   await peerConnection.setRemoteDescription(answer);
 });
 
-/* ICE */
 socket.on("ice-candidate", async (candidate) => {
   try {
     await peerConnection.addIceCandidate(candidate);
   } catch (e) {
     console.error(e);
   }
-});
-
-/* =========================
-   USER COUNT
-========================= */
-socket.on("room-users", (count) => {
-  userCount.innerText = `Users in room: ${count}`;
 });
 </script>
 
