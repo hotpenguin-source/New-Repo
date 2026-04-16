@@ -13,7 +13,6 @@
 
 <br><br>
 
-<!-- 🎛️ Controls -->
 <button id="callBtn">Start Call</button>
 <button id="micBtn">Mute Mic</button>
 <button id="camBtn">Turn Camera Off</button>
@@ -21,16 +20,18 @@
 <script src="/socket.io/socket.io.js"></script>
 <script>
 /* =========================
-   ROOM + ROLE SYSTEM
+   ROOM SYSTEM (IMPORTANT)
 ========================= */
-const urlParams = new URLSearchParams(window.location.search);
-const role = urlParams.get("role") || "caller";
+const pathParts = window.location.pathname.split("/");
+const roomId = pathParts[2];
+
+const socket = io({
+  query: { roomId }
+});
 
 /* =========================
-   SOCKET
+   UI
 ========================= */
-const socket = io();
-
 const localVideo = document.getElementById("localVideo");
 const remoteVideo = document.getElementById("remoteVideo");
 const remoteAudio = document.getElementById("remoteAudio");
@@ -39,8 +40,12 @@ const callBtn = document.getElementById("callBtn");
 const micBtn = document.getElementById("micBtn");
 const camBtn = document.getElementById("camBtn");
 
+/* =========================
+   STATE
+========================= */
 let localStream;
 let peerConnection;
+let isCaller = false;
 
 let micEnabled = true;
 let camEnabled = true;
@@ -59,11 +64,7 @@ async function init() {
 
   localStream = await navigator.mediaDevices.getUserMedia({
     video: true,
-    audio: {
-      echoCancellation: true,
-      noiseSuppression: true,
-      autoGainControl: true
-    }
+    audio: true
   });
 
   localVideo.srcObject = localStream;
@@ -76,7 +77,6 @@ async function init() {
 
   peerConnection.ontrack = (event) => {
     const stream = event.streams[0];
-
     remoteVideo.srcObject = stream;
     remoteAudio.srcObject = stream;
   };
@@ -89,18 +89,16 @@ async function init() {
 }
 
 /* =========================
-   CALL BUTTON (ONLY CALLER INITIATES)
+   CALL BUTTON
 ========================= */
 callBtn.onclick = async () => {
-  if (role !== "caller") {
-    alert("Only caller can start the call");
-    return;
-  }
-
   await init();
+
+  isCaller = true;
 
   const offer = await peerConnection.createOffer();
   await peerConnection.setLocalDescription(offer);
+
   socket.emit("offer", offer);
 
   callBtn.disabled = true;
@@ -108,24 +106,19 @@ callBtn.onclick = async () => {
 };
 
 /* =========================
-   MIC TOGGLE
+   CONTROLS
 ========================= */
 micBtn.onclick = () => {
-  const audioTrack = localStream.getAudioTracks()[0];
+  const track = localStream.getAudioTracks()[0];
   micEnabled = !micEnabled;
-  audioTrack.enabled = micEnabled;
-
+  track.enabled = micEnabled;
   micBtn.innerText = micEnabled ? "Mute Mic" : "Unmute Mic";
 };
 
-/* =========================
-   CAMERA TOGGLE
-========================= */
 camBtn.onclick = () => {
-  const videoTrack = localStream.getVideoTracks()[0];
+  const track = localStream.getVideoTracks()[0];
   camEnabled = !camEnabled;
-  videoTrack.enabled = camEnabled;
-
+  track.enabled = camEnabled;
   camBtn.innerText = camEnabled ? "Turn Camera Off" : "Turn Camera On";
 };
 
@@ -136,23 +129,28 @@ socket.on("connect", async () => {
   await init();
 });
 
+/* OFFER = someone started call */
 socket.on("offer", async (offer) => {
-  if (role === "caller") return; // prevent self-conflict
-
   await init();
 
-  await peerConnection.setRemoteDescription(offer);
+  if (!peerConnection.currentRemoteDescription) {
+    isCaller = false;
 
-  const answer = await peerConnection.createAnswer();
-  await peerConnection.setLocalDescription(answer);
+    await peerConnection.setRemoteDescription(offer);
 
-  socket.emit("answer", answer);
+    const answer = await peerConnection.createAnswer();
+    await peerConnection.setLocalDescription(answer);
+
+    socket.emit("answer", answer);
+  }
 });
 
+/* ANSWER */
 socket.on("answer", async (answer) => {
   await peerConnection.setRemoteDescription(answer);
 });
 
+/* ICE */
 socket.on("ice-candidate", async (candidate) => {
   try {
     await peerConnection.addIceCandidate(candidate);
