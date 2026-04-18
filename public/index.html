@@ -24,30 +24,15 @@
       display: none;
       align-items: center;
       justify-content: center;
-      overflow: hidden;
+      background: black;
     }
 
-    /* blurred background */
-    .placeholder::before {
-      content: "";
-      position: absolute;
-      width: 100%;
-      height: 100%;
-      background-size: cover;
-      background-position: center;
-      filter: blur(20px);
-      transform: scale(1.2);
-      z-index: 0;
-    }
-
-    /* avatar */
+    /* KEEP YOUR ORIGINAL OVAL */
     .placeholder img {
       width: 40%;
       height: 40%;
-      border-radius: 50%;
       object-fit: cover;
-      z-index: 1;
-      border: 4px solid white;
+      border-radius: 50%;
     }
 
     .mute-indicator {
@@ -101,7 +86,7 @@
 
 <body>
 
-<h2>Donut Forget to Pray</h2>
+<h2>Dun Forget to Pray</h2>
 
 <div id="remoteWrapper">
   <video id="remoteVideo" autoplay playsinline></video>
@@ -156,13 +141,6 @@ const userImages = {
 document.getElementById("localPlaceholderImg").src = userImages[user];
 document.getElementById("remotePlaceholderImg").src = userImages[remoteUser];
 
-document.querySelector("#localPlaceholder").style.setProperty(
-  "--bg", `url(${userImages[user]})`
-);
-document.querySelector("#remotePlaceholder").style.setProperty(
-  "--bg", `url(${userImages[remoteUser]})`
-);
-
 const socket = io({ query: { roomId } });
 
 let localStream;
@@ -214,7 +192,7 @@ async function init() {
   };
 }
 
-/* create fake video from image */
+/* create image stream */
 function createImageStream(imageSrc) {
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
@@ -283,11 +261,19 @@ document.getElementById("camBtn").onclick = () => {
   socket.emit("camera-status", { camEnabled });
 };
 
-/* remote UI */
+/* REMOTE CAMERA UI (FIXED) */
 socket.on("camera-status", ({ camEnabled }) => {
   const remotePlaceholder = document.getElementById("remotePlaceholder");
+  const remoteVideo = document.getElementById("remoteVideo");
 
-  remotePlaceholder.style.display = camEnabled ? "none" : "flex";
+  if (camEnabled) {
+    remotePlaceholder.style.display = "none";
+    remoteVideo.style.display = "block";
+    remoteVideo.style.opacity = "1";
+  } else {
+    remotePlaceholder.style.display = "flex";
+    remoteVideo.style.opacity = "0";
+  }
 });
 
 /* CALL FLOW */
