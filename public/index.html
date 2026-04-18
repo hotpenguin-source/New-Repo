@@ -124,19 +124,14 @@
 const params = new URLSearchParams(window.location.search);
 const user = params.get("user") || "pine";
 
-/* ASSIGN IMAGE */
-let placeholderImage;
-
-if (user === "pine") {
-  placeholderImage = "pine.jpg";
-} else if (user === "precious") {
-  placeholderImage = "precious.jpg";
-} else {
-  placeholderImage = "pine.jpg"; // fallback
-}
+/* 🔥 CLEAN IMAGE MAP */
+const userImages = {
+  pine: "pine.jpg",
+  precious: "precious.jpg"
+};
 
 /* SET LOCAL IMAGE */
-document.getElementById("localPlaceholderImg").src = placeholderImage;
+document.getElementById("localPlaceholderImg").src = userImages[user];
 
 const roomId = "main";
 const socket = io({ query: { roomId } });
@@ -226,11 +221,8 @@ socket.on("camera-status", ({ camEnabled, user }) => {
   const remoteImg = document.getElementById("remotePlaceholderImg");
 
   if (!camEnabled) {
-    if (user === "pine") {
-      remoteImg.src = "pine.jpg";
-    } else {
-      remoteImg.src = "precious.jpg";
-    }
+    /* 🔥 THIS IS THE FIX */
+    remoteImg.src = userImages[user];
     remotePlaceholder.style.display = "flex";
   } else {
     remotePlaceholder.style.display = "none";
