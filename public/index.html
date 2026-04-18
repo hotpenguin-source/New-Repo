@@ -1,14 +1,44 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Video Call</title>
+  <title>Our Quiet Place</title>
 
   <style>
     #localVideo {
       transform: scaleX(-1);
     }
 
-    /* CENTER CONTROLS */
+    /* WRAPPERS */
+    #localWrapper, #remoteWrapper {
+      position: relative;
+      display: inline-block;
+      width: 45%;
+    }
+
+    video {
+      width: 100%;
+    }
+
+    /* PLACEHOLDERS */
+    .placeholder {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: none;
+      background: black;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .placeholder img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    /* CONTROLS */
     #controls {
       position: fixed;
       bottom: 30px;
@@ -18,7 +48,6 @@
       gap: 20px;
     }
 
-    /* ROUND BUTTONS */
     .control-btn {
       width: 70px;
       height: 70px;
@@ -29,24 +58,16 @@
       align-items: center;
       justify-content: center;
       cursor: pointer;
-
       overflow: hidden;
       transition: all 0.2s ease;
     }
 
-    /* IMAGE FILLS BUTTON */
     .control-btn img {
       width: 100%;
       height: 100%;
       object-fit: cover;
-      border-radius: 50%;
     }
 
-    .control-btn:hover {
-      background: #444;
-    }
-
-    /* 🔴 RED OVERLAY WHEN OFF */
     .control-btn.off {
       background: rgba(255, 0, 0, 0.5);
     }
@@ -59,10 +80,26 @@
 
 <body>
 
-<h2>Video Call</h2>
+<h2>Don't Forget to Pray</h2>
 
-<video id="localVideo" autoplay playsinline muted style="width:45%;"></video>
-<video id="remoteVideo" autoplay playsinline style="width:45%;"></video>
+<!-- REMOTE -->
+<div id="remoteWrapper">
+  <video id="remoteVideo" autoplay playsinline></video>
+
+  <div id="remotePlaceholder" class="placeholder">
+    <img id="remotePlaceholderImg" src="">
+  </div>
+</div>
+
+<!-- LOCAL -->
+<div id="localWrapper">
+  <video id="localVideo" autoplay playsinline muted></video>
+
+  <div id="localPlaceholder" class="placeholder">
+    <img id="localPlaceholderImg" src="">
+  </div>
+</div>
+
 <audio id="remoteAudio" autoplay></audio>
 
 <br><br>
@@ -81,6 +118,26 @@
 <script src="/socket.io/socket.io.js"></script>
 
 <script>
+/* =========================
+   USER IDENTITY
+========================= */
+const params = new URLSearchParams(window.location.search);
+const user = params.get("user") || "pine";
+
+/* ASSIGN IMAGE */
+let placeholderImage;
+
+if (user === "pine") {
+  placeholderImage = "pine.jpg";
+} else if (user === "precious") {
+  placeholderImage = "precious.jpg";
+} else {
+  placeholderImage = "pine.jpg"; // fallback
+}
+
+/* SET LOCAL IMAGE */
+document.getElementById("localPlaceholderImg").src = placeholderImage;
+
 const roomId = "main";
 const socket = io({ query: { roomId } });
 
@@ -140,6 +197,8 @@ document.getElementById("micBtn").onclick = () => {
 };
 
 /* CAMERA BUTTON */
+const localPlaceholder = document.getElementById("localPlaceholder");
+
 document.getElementById("camBtn").onclick = () => {
   if (!localStream) return;
 
@@ -150,7 +209,33 @@ document.getElementById("camBtn").onclick = () => {
 
   document.getElementById("camBtn")
     .classList.toggle("off", !camEnabled);
+
+  /* LOCAL VIEW */
+  localPlaceholder.style.display = camEnabled ? "none" : "flex";
+
+  /* SYNC TO OTHER USER */
+  socket.emit("camera-status", {
+    camEnabled,
+    user
+  });
 };
+
+/* RECEIVE OTHER USER CAMERA STATUS */
+socket.on("camera-status", ({ camEnabled, user }) => {
+  const remotePlaceholder = document.getElementById("remotePlaceholder");
+  const remoteImg = document.getElementById("remotePlaceholderImg");
+
+  if (!camEnabled) {
+    if (user === "pine") {
+      remoteImg.src = "pine.jpg";
+    } else {
+      remoteImg.src = "precious.jpg";
+    }
+    remotePlaceholder.style.display = "flex";
+  } else {
+    remotePlaceholder.style.display = "none";
+  }
+});
 
 /* AUTO CALL LOGIC */
 socket.on("connect", async () => {
