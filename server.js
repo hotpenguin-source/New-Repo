@@ -8,18 +8,19 @@ const io = new Server(server);
 
 app.use(express.static("public"));
 
-/* 🔥 TRACK USERS */
-let usersInRoom = 0;
-
 io.on("connection", (socket) => {
   console.log("User connected:", socket.id);
 
   socket.join("main");
-  usersInRoom++;
 
-  /* READY → START CALL */
-  socket.on("ready", () => {
-    if (usersInRoom === 2) {
+  /* 🔥 READY */
+  socket.on("ready", async () => {
+    const room = io.sockets.adapter.rooms.get("main");
+    const numClients = room ? room.size : 0;
+
+    console.log("Users in room:", numClients);
+
+    if (numClients === 2) {
       console.log("Starting call...");
       io.to("main").emit("start-call");
     }
@@ -49,7 +50,6 @@ io.on("connection", (socket) => {
   });
 
   socket.on("disconnect", () => {
-    usersInRoom--;
     console.log("User disconnected:", socket.id);
   });
 });
