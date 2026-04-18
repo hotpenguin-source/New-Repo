@@ -12,8 +12,8 @@ app.get("/room/:id", (req, res) => {
   res.sendFile(__dirname + "/public/index.html");
 });
 
-/* ✅ WAITING USERS PER ROOM */
-const waiting = {};
+/* TRACK USERS IN ROOM */
+let waitingSocket = null;
 
 io.on("connection", (socket) => {
   const roomId = socket.handshake.query.roomId;
@@ -24,26 +24,26 @@ io.on("connection", (socket) => {
   }
 
   socket.join(roomId);
-  console.log("User connected:", socket.id, "Room:", roomId);
 
-  /* ✅ PAIR USERS */
+  console.log("User joined:", socket.id);
+
+  /* Mark user ready */
   socket.on("ready", () => {
-    if (!waiting[roomId]) {
-      waiting[roomId] = socket.id;
-      console.log("Waiting in room:", roomId, socket.id);
+    // If no one is waiting → this user waits
+    if (!waitingSocket) {
+      waitingSocket = socket.id;
+      console.log("User is waiting:", socket.id);
     } else {
-      const partner = waiting[roomId];
+      // Someone is already waiting → start call
+      console.log("Starting call between:", waitingSocket, socket.id);
 
-      console.log("Pairing:", partner, socket.id);
+      io.to(waitingSocket).emit("start-call");
 
-      io.to(partner).emit("start-call");
-      io.to(socket.id).emit("start-call");
-
-      delete waiting[roomId];
+      waitingSocket = null;
     }
   });
 
-  /* ✅ SIGNALING */
+  /* SIGNALING */
   socket.on("offer", (offer) => {
     socket.to(roomId).emit("offer", offer);
   });
@@ -56,26 +56,13 @@ io.on("connection", (socket) => {
     socket.to(roomId).emit("ice-candidate", candidate);
   });
 
-  /* UI SYNC */
-  socket.on("camera-status", (data) => {
-    socket.to(roomId).emit("camera-status", data);
-  });
-
-  socket.on("mic-status", (data) => {
-    socket.to(roomId).emit("mic-status", data);
-  });
-
   socket.on("disconnect", () => {
-    console.log("Disconnected:", socket.id);
-    console.log("Disconnected:", socket.id);
-
-    if (waiting[roomId] === socket.id) {
-      delete waiting[roomId];
+    if (waitingSocket === socket.id) {
+      waitingSocket = null;
     }
   });
 });
 
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, "0.0.0.0", () => {
-  console.log("Server running on port", PORT);
+server.listen(process.env.PORT || 3000, "0.0.0.0", () => {
+  console.log("Server running");
 });
