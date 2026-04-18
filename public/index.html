@@ -20,6 +20,8 @@
       width: 100%; height: 100%;
       display: none;
       background: black;
+      align-items: center;
+      justify-content: center;
     }
 
     .placeholder img {
@@ -79,7 +81,7 @@
 
 <body>
 
-<h2>Dun Forget to Pray</h2>
+<h2>Donut Forget to Pray</h2>
 
 <div id="remoteWrapper">
   <video id="remoteVideo" autoplay playsinline></video>
@@ -131,9 +133,12 @@ const userImages = {
   precious: "precious.jpg"
 };
 
-/* ✅ SET BOTH IMAGES IMMEDIATELY */
+/* ✅ SET IMAGES */
 document.getElementById("localPlaceholderImg").src = userImages[user];
 document.getElementById("remotePlaceholderImg").src = userImages[remoteUser];
+
+/* ✅ ENSURE VIDEO VISIBLE INITIALLY */
+document.getElementById("remoteVideo").style.display = "block";
 
 const socket = io({ query: { roomId } });
 
@@ -219,15 +224,27 @@ document.getElementById("camBtn").onclick = () => {
   track.enabled = camEnabled;
 
   document.getElementById("camBtn").classList.toggle("off", !camEnabled);
+
+  // LOCAL UI
   document.getElementById("localPlaceholder").style.display =
     camEnabled ? "none" : "flex";
+  document.getElementById("localVideo").style.display =
+    camEnabled ? "block" : "none";
 
   socket.emit("camera-status", { camEnabled });
 };
 
 socket.on("camera-status", ({ camEnabled }) => {
   const remotePlaceholder = document.getElementById("remotePlaceholder");
-  remotePlaceholder.style.display = camEnabled ? "none" : "flex";
+  const remoteVideo = document.getElementById("remoteVideo");
+
+  if (camEnabled) {
+    remotePlaceholder.style.display = "none";
+    remoteVideo.style.display = "block";
+  } else {
+    remotePlaceholder.style.display = "flex";
+    remoteVideo.style.display = "none";
+  }
 });
 
 /* CALL FLOW */
