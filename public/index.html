@@ -38,6 +38,26 @@
       object-fit: cover;
     }
 
+    /* 🔇 MUTE INDICATOR */
+    .mute-indicator {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      overflow: hidden;
+      display: none;
+      border: 2px solid red;
+      background: black;
+    }
+
+    .mute-indicator img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
     /* CONTROLS */
     #controls {
       position: fixed;
@@ -52,7 +72,7 @@
       width: 70px;
       height: 70px;
       border-radius: 50%;
-      border: none;
+      border: 4px solid yellow; /* 🔥 default ON color */
       background: #222;
       display: flex;
       align-items: center;
@@ -68,13 +88,11 @@
       object-fit: cover;
     }
 
+    /* 🔴 MUTED STATE */
     .control-btn.off {
-      background: rgba(255, 0, 0, 0.5);
+      border-color: red;
     }
 
-    .control-btn.off img {
-      filter: brightness(0.6);
-    }
   </style>
 </head>
 
@@ -87,7 +105,11 @@
   <video id="remoteVideo" autoplay playsinline></video>
 
   <div id="remotePlaceholder" class="placeholder">
-    <img id="remotePlaceholderImg" src="">
+    <img id="remotePlaceholderImg">
+  </div>
+
+  <div id="remoteMute" class="mute-indicator">
+    <img src="mute.png">
   </div>
 </div>
 
@@ -96,13 +118,15 @@
   <video id="localVideo" autoplay playsinline muted></video>
 
   <div id="localPlaceholder" class="placeholder">
-    <img id="localPlaceholderImg" src="">
+    <img id="localPlaceholderImg">
+  </div>
+
+  <div id="localMute" class="mute-indicator">
+    <img src="mute.png">
   </div>
 </div>
 
 <audio id="remoteAudio" autoplay></audio>
-
-<br><br>
 
 <!-- CONTROLS -->
 <div id="controls">
@@ -118,23 +142,17 @@
 <script src="/socket.io/socket.io.js"></script>
 
 <script>
-/* =========================
-   USER IDENTITY
-========================= */
 const params = new URLSearchParams(window.location.search);
 const user = params.get("user") || "pine";
 
-/* 🔥 CLEAN IMAGE MAP */
 const userImages = {
   pine: "pine.jpg",
   precious: "precious.jpg"
 };
 
-/* SET LOCAL IMAGE */
 document.getElementById("localPlaceholderImg").src = userImages[user];
 
-const roomId = "main";
-const socket = io({ query: { roomId } });
+const socket = io({ query: { roomId: "main" } });
 
 let localStream;
 let peerConnection;
@@ -148,7 +166,6 @@ const config = {
   ]
 };
 
-/* INIT MEDIA */
 async function init() {
   if (peerConnection) return;
 
@@ -178,18 +195,35 @@ async function init() {
   };
 }
 
-/* MIC BUTTON */
+/* 🎤 MIC BUTTON */
+const localMuteIcon = document.getElementById("localMute");
+
 document.getElementById("micBtn").onclick = () => {
   if (!localStream) return;
 
   const track = localStream.getAudioTracks()[0];
   micEnabled = !micEnabled;
-
   track.enabled = micEnabled;
 
   document.getElementById("micBtn")
     .classList.toggle("off", !micEnabled);
+
+  /* LOCAL INDICATOR */
+  localMuteIcon.style.display = micEnabled ? "none" : "block";
+
+  /* SYNC */
+  socket.emit("mic-status", {
+    micEnabled,
+    user
+  });
 };
+
+/* RECEIVE OTHER USER MUTE */
+socket.on("mic-status", ({ micEnabled, user }) => {
+  const remoteMute = document.getElementById("remoteMute");
+
+  remoteMute.style.display = micEnabled ? "none" : "block";
+});
 
 /* CAMERA BUTTON */
 const localPlaceholder = document.getElementById("localPlaceholder");
@@ -205,23 +239,19 @@ document.getElementById("camBtn").onclick = () => {
   document.getElementById("camBtn")
     .classList.toggle("off", !camEnabled);
 
-  /* LOCAL VIEW */
   localPlaceholder.style.display = camEnabled ? "none" : "flex";
 
-  /* SYNC TO OTHER USER */
   socket.emit("camera-status", {
     camEnabled,
     user
   });
 };
 
-/* RECEIVE OTHER USER CAMERA STATUS */
 socket.on("camera-status", ({ camEnabled, user }) => {
   const remotePlaceholder = document.getElementById("remotePlaceholder");
   const remoteImg = document.getElementById("remotePlaceholderImg");
 
   if (!camEnabled) {
-    /* 🔥 THIS IS THE FIX */
     remoteImg.src = userImages[user];
     remotePlaceholder.style.display = "flex";
   } else {
@@ -229,7 +259,7 @@ socket.on("camera-status", ({ camEnabled, user }) => {
   }
 });
 
-/* AUTO CALL LOGIC */
+/* CALL LOGIC */
 socket.on("connect", async () => {
   await init();
   socket.emit("ready");
@@ -238,28 +268,22 @@ socket.on("connect", async () => {
 socket.on("start-call", async () => {
   const offer = await peerConnection.createOffer();
   await peerConnection.setLocalDescription(offer);
-
   socket.emit("offer", offer);
 });
 
-/* OFFER */
 socket.on("offer", async (offer) => {
   await init();
-
   await peerConnection.setRemoteDescription(offer);
 
   const answer = await peerConnection.createAnswer();
   await peerConnection.setLocalDescription(answer);
-
   socket.emit("answer", answer);
 });
 
-/* ANSWER */
 socket.on("answer", async (answer) => {
   await peerConnection.setRemoteDescription(answer);
 });
 
-/* ICE */
 socket.on("ice-candidate", async (candidate) => {
   try {
     await peerConnection.addIceCandidate(candidate);
