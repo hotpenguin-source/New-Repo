@@ -12,22 +12,42 @@
       width: 45%;
     }
 
-    video { width: 100%; }
+    video {
+      width: 100%;
+      transition: opacity 0.3s ease;
+    }
 
     .placeholder {
       position: absolute;
       top: 0; left: 0;
       width: 100%; height: 100%;
       display: none;
-      background: black;
       align-items: center;
       justify-content: center;
+      overflow: hidden;
     }
 
-    .placeholder img {
+    /* blurred background */
+    .placeholder::before {
+      content: "";
+      position: absolute;
       width: 100%;
       height: 100%;
+      background-size: cover;
+      background-position: center;
+      filter: blur(20px);
+      transform: scale(1.2);
+      z-index: 0;
+    }
+
+    /* avatar */
+    .placeholder img {
+      width: 40%;
+      height: 40%;
+      border-radius: 50%;
       object-fit: cover;
+      z-index: 1;
+      border: 4px solid white;
     }
 
     .mute-indicator {
@@ -133,17 +153,21 @@ const userImages = {
   precious: "precious.jpg"
 };
 
-/* ✅ SET IMAGES */
 document.getElementById("localPlaceholderImg").src = userImages[user];
 document.getElementById("remotePlaceholderImg").src = userImages[remoteUser];
 
-/* ✅ ENSURE VIDEO VISIBLE INITIALLY */
-document.getElementById("remoteVideo").style.display = "block";
+document.querySelector("#localPlaceholder").style.setProperty(
+  "--bg", `url(${userImages[user]})`
+);
+document.querySelector("#remotePlaceholder").style.setProperty(
+  "--bg", `url(${userImages[remoteUser]})`
+);
 
 const socket = io({ query: { roomId } });
 
 let localStream;
 let peerConnection;
+let videoSender;
 let pendingCandidates = [];
 
 let micEnabled = true;
@@ -163,23 +187,18 @@ const config = {
 async function init() {
   if (peerConnection) return;
 
-  try {
-    localStream = await navigator.mediaDevices.getUserMedia({
-      video: true,
-      audio: true
-    });
-  } catch (err) {
-    console.error("Media error:", err);
-    alert("Camera/Mic access denied");
-    return;
-  }
+  localStream = await navigator.mediaDevices.getUserMedia({
+    video: true,
+    audio: true
+  });
 
   document.getElementById("localVideo").srcObject = localStream;
 
   peerConnection = new RTCPeerConnection(config);
 
   localStream.getTracks().forEach(track => {
-    peerConnection.addTrack(track, localStream);
+    const sender = peerConnection.addTrack(track, localStream);
+    if (track.kind === "video") videoSender = sender;
   });
 
   peerConnection.ontrack = (event) => {
@@ -193,6 +212,26 @@ async function init() {
       socket.emit("ice-candidate", event.candidate);
     }
   };
+}
+
+/* create fake video from image */
+function createImageStream(imageSrc) {
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+
+  const img = new Image();
+  img.src = imageSrc;
+
+  canvas.width = 640;
+  canvas.height = 480;
+
+  img.onload = () => {
+    setInterval(() => {
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    }, 100);
+  };
+
+  return canvas.captureStream(10);
 }
 
 /* MIC */
@@ -217,34 +256,38 @@ socket.on("mic-status", ({ micEnabled }) => {
 
 /* CAMERA */
 document.getElementById("camBtn").onclick = () => {
-  if (!localStream) return;
+  if (!localStream || !videoSender) return;
 
-  const track = localStream.getVideoTracks()[0];
   camEnabled = !camEnabled;
-  track.enabled = camEnabled;
+
+  const localVideo = document.getElementById("localVideo");
+  const localPlaceholder = document.getElementById("localPlaceholder");
 
   document.getElementById("camBtn").classList.toggle("off", !camEnabled);
 
-  // LOCAL UI
-  document.getElementById("localPlaceholder").style.display =
-    camEnabled ? "none" : "flex";
-  document.getElementById("localVideo").style.display =
-    camEnabled ? "block" : "none";
+  if (camEnabled) {
+    const realTrack = localStream.getVideoTracks()[0];
+    videoSender.replaceTrack(realTrack);
+
+    localVideo.style.opacity = "1";
+    localPlaceholder.style.display = "none";
+  } else {
+    const imgStream = createImageStream(userImages[user]);
+    const imgTrack = imgStream.getVideoTracks()[0];
+    videoSender.replaceTrack(imgTrack);
+
+    localVideo.style.opacity = "0";
+    localPlaceholder.style.display = "flex";
+  }
 
   socket.emit("camera-status", { camEnabled });
 };
 
+/* remote UI */
 socket.on("camera-status", ({ camEnabled }) => {
   const remotePlaceholder = document.getElementById("remotePlaceholder");
-  const remoteVideo = document.getElementById("remoteVideo");
 
-  if (camEnabled) {
-    remotePlaceholder.style.display = "none";
-    remoteVideo.style.display = "block";
-  } else {
-    remotePlaceholder.style.display = "flex";
-    remoteVideo.style.display = "none";
-  }
+  remotePlaceholder.style.display = camEnabled ? "none" : "flex";
 });
 
 /* CALL FLOW */
@@ -280,11 +323,7 @@ socket.on("answer", async (answer) => {
 
 socket.on("ice-candidate", async (candidate) => {
   if (peerConnection && peerConnection.remoteDescription) {
-    try {
-      await peerConnection.addIceCandidate(candidate);
-    } catch (e) {
-      console.error("ICE error:", e);
-    }
+    await peerConnection.addIceCandidate(candidate);
   } else {
     pendingCandidates.push(candidate);
   }
