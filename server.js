@@ -13,20 +13,7 @@ io.on("connection", (socket) => {
 
   socket.join("main");
 
-  /* 🔥 READY */
-  socket.on("ready", async () => {
-    const room = io.sockets.adapter.rooms.get("main");
-    const numClients = room ? room.size : 0;
-
-    console.log("Users in room:", numClients);
-
-    if (numClients === 2) {
-      console.log("Starting call...");
-      io.to("main").emit("start-call");
-    }
-  });
-
-  /* SIGNALING */
+  /* WebRTC signaling ONLY */
   socket.on("offer", (offer) => {
     socket.to("main").emit("offer", offer);
   });
@@ -39,12 +26,11 @@ io.on("connection", (socket) => {
     socket.to("main").emit("ice-candidate", candidate);
   });
 
-  /* SYNC CAMERA */
+  /* UI sync only */
   socket.on("camera-status", (data) => {
     socket.to("main").emit("camera-status", data);
   });
 
-  /* SYNC MIC */
   socket.on("mic-status", (data) => {
     socket.to("main").emit("mic-status", data);
   });
