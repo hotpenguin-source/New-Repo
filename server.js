@@ -8,35 +8,65 @@ const io = new Server(server);
 
 app.use(express.static("public"));
 
+app.get("/room/:id", (req, res) => {
+  res.sendFile(__dirname + "/public/index.html");
+});
+
+/* 🔥 SIMPLE 2-PERSON PAIRING */
+let waitingSocket = null;
+
 io.on("connection", (socket) => {
+  const roomId = socket.handshake.query.roomId;
+
+  if (!roomId) {
+    socket.disconnect();
+    return;
+  }
+
+  socket.join(roomId);
+
   console.log("User connected:", socket.id);
 
-  socket.join("main");
+  /* READY → PAIR USERS */
+  socket.on("ready", () => {
+    if (!waitingSocket) {
+      waitingSocket = socket.id;
+      console.log("Waiting:", socket.id);
+    } else {
+      console.log("Pairing:", waitingSocket, socket.id);
 
-  /* WebRTC signaling ONLY */
+      io.to(waitingSocket).emit("start-call");
+
+      waitingSocket = null;
+    }
+  });
+
+  /* WEBRTC SIGNALING */
   socket.on("offer", (offer) => {
-    socket.to("main").emit("offer", offer);
+    socket.to(roomId).emit("offer", offer);
   });
 
   socket.on("answer", (answer) => {
-    socket.to("main").emit("answer", answer);
+    socket.to(roomId).emit("answer", answer);
   });
 
   socket.on("ice-candidate", (candidate) => {
-    socket.to("main").emit("ice-candidate", candidate);
+    socket.to(roomId).emit("ice-candidate", candidate);
   });
 
-  /* UI sync only */
+  /* UI SYNC */
   socket.on("camera-status", (data) => {
-    socket.to("main").emit("camera-status", data);
+    socket.to(roomId).emit("camera-status", data);
   });
 
   socket.on("mic-status", (data) => {
-    socket.to("main").emit("mic-status", data);
+    socket.to(roomId).emit("mic-status", data);
   });
 
   socket.on("disconnect", () => {
-    console.log("User disconnected:", socket.id);
+    if (waitingSocket === socket.id) {
+      waitingSocket = null;
+    }
   });
 });
 
