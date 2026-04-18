@@ -32,28 +32,33 @@
       align-items: center;
     }
 
-    /* 🔥 FORCE FULL IMAGE COVER */
-    .placeholder img,
+    /* ✅ FULL IMAGE (NOT CIRCLE) */
+    .placeholder img {
+      width: 110%;
+      height: 110%;
+      object-fit: cover;
+    }
+
+    /* 🔇 MUTE INDICATOR (BIGGER, NO BORDER) */
+    .mute-indicator {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      width: 65px;
+      height: 65px;
+      border-radius: 50%;
+      overflow: hidden;
+      display: none;
+      background: black;
+    }
+
+    /* ONLY ICONS ARE CIRCLES */
     .control-btn img,
     .mute-indicator img {
       width: 110%;
       height: 110%;
       object-fit: cover;
       border-radius: 50%;
-    }
-
-    /* 🔇 MUTE INDICATOR */
-    .mute-indicator {
-      position: absolute;
-      top: 10px;
-      right: 10px;
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      overflow: hidden;
-      display: none;
-      border: 2px solid red;
-      background: black;
     }
 
     /* CONTROLS */
@@ -70,7 +75,7 @@
       width: 70px;
       height: 70px;
       border-radius: 50%;
-      border: 4px solid yellow;
+      border: 4px solid white;
       background: #222;
       display: flex;
       align-items: center;
@@ -80,11 +85,10 @@
       transition: all 0.2s ease;
     }
 
-    /* 🔴 MUTED STATE */
+    /* 🟡 OFF STATE */
     .control-btn.off {
-      border-color: red;
+      border-color: yellow;
     }
-
   </style>
 </head>
 
@@ -137,7 +141,7 @@
 const params = new URLSearchParams(window.location.search);
 const user = params.get("user") || "pine";
 
-/* 🔥 HARD MAPPING */
+/* HARD MAPPING */
 const remoteUser = user === "pine" ? "precious" : "pine";
 
 const userImages = {
@@ -145,7 +149,6 @@ const userImages = {
   precious: "precious.jpg"
 };
 
-/* LOCAL IMAGE */
 document.getElementById("localPlaceholderImg").src = userImages[user];
 
 const socket = io({ query: { roomId: "main" } });
@@ -191,7 +194,7 @@ async function init() {
   };
 }
 
-/* 🎤 MIC BUTTON */
+/* MIC */
 const localMuteIcon = document.getElementById("localMute");
 
 document.getElementById("micBtn").onclick = () => {
@@ -201,23 +204,18 @@ document.getElementById("micBtn").onclick = () => {
   micEnabled = !micEnabled;
   track.enabled = micEnabled;
 
-  document.getElementById("micBtn")
-    .classList.toggle("off", !micEnabled);
-
-  /* LOCAL INDICATOR */
+  document.getElementById("micBtn").classList.toggle("off", !micEnabled);
   localMuteIcon.style.display = micEnabled ? "none" : "block";
 
-  /* SYNC */
   socket.emit("mic-status", { micEnabled });
 };
 
-/* RECEIVE REMOTE MUTE */
 socket.on("mic-status", ({ micEnabled }) => {
-  const remoteMute = document.getElementById("remoteMute");
-  remoteMute.style.display = micEnabled ? "none" : "block";
+  document.getElementById("remoteMute").style.display =
+    micEnabled ? "none" : "block";
 });
 
-/* CAMERA BUTTON */
+/* CAMERA */
 const localPlaceholder = document.getElementById("localPlaceholder");
 
 document.getElementById("camBtn").onclick = () => {
@@ -228,28 +226,25 @@ document.getElementById("camBtn").onclick = () => {
 
   track.enabled = camEnabled;
 
-  document.getElementById("camBtn")
-    .classList.toggle("off", !camEnabled);
-
+  document.getElementById("camBtn").classList.toggle("off", !camEnabled);
   localPlaceholder.style.display = camEnabled ? "none" : "flex";
 
   socket.emit("camera-status", { camEnabled });
 };
 
-/* RECEIVE REMOTE CAMERA */
 socket.on("camera-status", ({ camEnabled }) => {
   const remotePlaceholder = document.getElementById("remotePlaceholder");
   const remoteImg = document.getElementById("remotePlaceholderImg");
 
   if (!camEnabled) {
-    remoteImg.src = userImages[remoteUser]; /* 🔥 FIXED */
+    remoteImg.src = userImages[remoteUser];
     remotePlaceholder.style.display = "flex";
   } else {
     remotePlaceholder.style.display = "none";
   }
 });
 
-/* CALL LOGIC */
+/* CALL */
 socket.on("connect", async () => {
   await init();
   socket.emit("ready");
