@@ -4,46 +4,34 @@
   <title>Our Quiet Place</title>
 
   <style>
-    #localVideo {
-      transform: scaleX(-1);
-    }
+    #localVideo { transform: scaleX(-1); }
 
-    /* WRAPPERS */
     #localWrapper, #remoteWrapper {
       position: relative;
       display: inline-block;
       width: 45%;
     }
 
-    video {
-      width: 100%;
-    }
+    video { width: 100%; }
 
-    /* CAMERA OFF OVERLAY */
     .placeholder {
       position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
       display: none;
       background: black;
     }
 
-    /* 🔥 FIX: FULL COVER IMAGE (NO OVAL) */
     .placeholder img {
       width: 100%;
       height: 100%;
       object-fit: cover;
     }
 
-    /* 🔇 MUTE ICON */
     .mute-indicator {
       position: absolute;
-      top: 10px;
-      right: 10px;
-      width: 70px;
-      height: 70px;
+      top: 10px; right: 10px;
+      width: 70px; height: 70px;
       border-radius: 50%;
       overflow: hidden;
       display: none;
@@ -56,7 +44,6 @@
       object-fit: cover;
     }
 
-    /* CONTROLS */
     #controls {
       position: fixed;
       bottom: 30px;
@@ -79,9 +66,7 @@
       overflow: hidden;
     }
 
-    .control-btn.off {
-      border-color: yellow;
-    }
+    .control-btn.off { border-color: yellow; }
 
     .control-btn img {
       width: 100%;
@@ -96,7 +81,6 @@
 
 <h2>Don't Forget to Pray</h2>
 
-<!-- REMOTE -->
 <div id="remoteWrapper">
   <video id="remoteVideo" autoplay playsinline></video>
 
@@ -109,7 +93,6 @@
   </div>
 </div>
 
-<!-- LOCAL -->
 <div id="localWrapper">
   <video id="localVideo" autoplay playsinline muted></video>
 
@@ -124,7 +107,6 @@
 
 <audio id="remoteAudio" autoplay></audio>
 
-<!-- CONTROLS -->
 <div id="controls">
   <button id="micBtn" class="control-btn">
     <img src="mic.png">
@@ -140,8 +122,8 @@
 <script>
 const params = new URLSearchParams(window.location.search);
 const user = params.get("user") || "pine";
+const roomId = params.get("room") || "main";
 
-/* FIXED ROLE MAPPING */
 const remoteUser = user === "pine" ? "precious" : "pine";
 
 const userImages = {
@@ -149,30 +131,41 @@ const userImages = {
   precious: "precious.jpg"
 };
 
-/* LOCAL IMAGE */
 document.getElementById("localPlaceholderImg").src = userImages[user];
 
-const socket = io({ query: { roomId: "main" } });
+const socket = io({ query: { roomId } });
 
 let localStream;
 let peerConnection;
+let pendingCandidates = [];
 
 let micEnabled = true;
 let camEnabled = true;
 
 const config = {
   iceServers: [
-    { urls: "stun:stun.l.google.com:19302" }
+    { urls: "stun:stun.l.google.com:19302" },
+    {
+      urls: "turn:openrelay.metered.ca:80",
+      username: "openrelayproject",
+      credential: "openrelayproject"
+    }
   ]
 };
 
 async function init() {
   if (peerConnection) return;
 
-  localStream = await navigator.mediaDevices.getUserMedia({
-    video: true,
-    audio: true
-  });
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({
+      video: true,
+      audio: true
+    });
+  } catch (err) {
+    console.error("Media error:", err);
+    alert("Camera/Mic access denied");
+    return;
+  }
 
   document.getElementById("localVideo").srcObject = localStream;
 
@@ -204,7 +197,6 @@ document.getElementById("micBtn").onclick = () => {
   track.enabled = micEnabled;
 
   document.getElementById("micBtn").classList.toggle("off", !micEnabled);
-
   document.getElementById("localMute").style.display =
     micEnabled ? "none" : "block";
 
@@ -225,7 +217,6 @@ document.getElementById("camBtn").onclick = () => {
   track.enabled = camEnabled;
 
   document.getElementById("camBtn").classList.toggle("off", !camEnabled);
-
   document.getElementById("localPlaceholder").style.display =
     camEnabled ? "none" : "flex";
 
@@ -253,7 +244,6 @@ socket.on("connect", async () => {
 socket.on("start-call", async () => {
   const offer = await peerConnection.createOffer();
   await peerConnection.setLocalDescription(offer);
-
   socket.emit("offer", offer);
 });
 
@@ -261,21 +251,30 @@ socket.on("offer", async (offer) => {
   await init();
   await peerConnection.setRemoteDescription(offer);
 
+  pendingCandidates.forEach(c => peerConnection.addIceCandidate(c));
+  pendingCandidates = [];
+
   const answer = await peerConnection.createAnswer();
   await peerConnection.setLocalDescription(answer);
-
   socket.emit("answer", answer);
 });
 
 socket.on("answer", async (answer) => {
   await peerConnection.setRemoteDescription(answer);
+
+  pendingCandidates.forEach(c => peerConnection.addIceCandidate(c));
+  pendingCandidates = [];
 });
 
 socket.on("ice-candidate", async (candidate) => {
-  try {
-    await peerConnection.addIceCandidate(candidate);
-  } catch (e) {
-    console.error(e);
+  if (peerConnection && peerConnection.remoteDescription) {
+    try {
+      await peerConnection.addIceCandidate(candidate);
+    } catch (e) {
+      console.error("ICE error:", e);
+    }
+  } else {
+    pendingCandidates.push(candidate);
   }
 });
 </script>
