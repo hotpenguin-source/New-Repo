@@ -79,7 +79,7 @@
 
 <body>
 
-<h2>Don't Forget to Pray</h2>
+<h2>Dun Forget to Pray</h2>
 
 <div id="remoteWrapper">
   <video id="remoteVideo" autoplay playsinline></video>
@@ -131,7 +131,9 @@ const userImages = {
   precious: "precious.jpg"
 };
 
+/* ✅ SET BOTH IMAGES IMMEDIATELY */
 document.getElementById("localPlaceholderImg").src = userImages[user];
+document.getElementById("remotePlaceholderImg").src = userImages[remoteUser];
 
 const socket = io({ query: { roomId } });
 
@@ -225,14 +227,7 @@ document.getElementById("camBtn").onclick = () => {
 
 socket.on("camera-status", ({ camEnabled }) => {
   const remotePlaceholder = document.getElementById("remotePlaceholder");
-  const remoteImg = document.getElementById("remotePlaceholderImg");
-
-  if (!camEnabled) {
-    remoteImg.src = userImages[remoteUser];
-    remotePlaceholder.style.display = "flex";
-  } else {
-    remotePlaceholder.style.display = "none";
-  }
+  remotePlaceholder.style.display = camEnabled ? "none" : "flex";
 });
 
 /* CALL FLOW */
